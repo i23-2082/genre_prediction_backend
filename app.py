@@ -138,5 +138,7 @@ def tts():
             Thread(target=delete_file, args=(filename,)).start()
 
 # ----------- FOR VERCEL ------------
-handler = app
+app = app
+
+
 
