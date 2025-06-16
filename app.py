@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS, cross_origin
+from flask_cors import CORS
 import pickle
 import re
 import nltk
@@ -46,11 +46,9 @@ except FileNotFoundError as e:
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 translator = Translator()
-
 stop_words = set(stopwords.words('english'))
 
 # ----------- UTILS ------------
-
 def preprocess_text(text):
     text = re.sub(r'[^\w\s]', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
@@ -67,13 +65,8 @@ def predict_genres(summary, threshold=0.3):
     return genres if genres else ['None']
 
 # ----------- ROUTES ------------
-
-@app.route('/api/predict', methods=['POST', 'OPTIONS'])
-@cross_origin()
+@app.route('/api/predict', methods=['POST'])
 def predict():
-    if request.method == 'OPTIONS':
-        return jsonify({'status': 'CORS preflight OK'}), 200
-
     data = request.get_json()
     if not data or 'input' not in data:
         return jsonify({'error': 'Missing input data'}), 400
@@ -90,7 +83,6 @@ def predict():
         return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
 
 @app.route('/api/tts', methods=['POST'])
-@cross_origin()
 def tts():
     data = request.get_json()
     text = data.get('text', '').strip()
@@ -105,7 +97,6 @@ def tts():
 
     filename = None
     try:
-        # Attempt translation with timeout
         translated = translator.translate(text, dest=lang)
         if not translated or not translated.text:
             raise ValueError("Translation returned empty result")
@@ -115,7 +106,6 @@ def tts():
         if translate_only:
             return jsonify({'translated_text': translated_text}), 200
 
-        # Generate TTS
         filename = f"audio_{uuid.uuid4()}.mp3"
         tts = gTTS(text=translated_text, lang=lang, slow=False)
         tts.save(filename)
@@ -135,7 +125,6 @@ def tts():
     except Exception as e:
         logger.error(f"TTS error: {e}")
         return jsonify({'error': f'Operation failed: {str(e)}'}), 500
-
     finally:
         if not translate_only and filename:
             def delete_file(path):
@@ -146,9 +135,8 @@ def tts():
                         logger.info(f"Deleted file: {path}")
                 except Exception as e:
                     logger.error(f"File delete error: {str(e)}")
-
             Thread(target=delete_file, args=(filename,)).start()
 
-# ----------- MAIN ------------
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+# ----------- FOR VERCEL ------------
+handler = app
+
