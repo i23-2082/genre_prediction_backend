@@ -55,6 +55,18 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 translator = Translator()
 stop_words = set(stopwords.words('english'))
 
+# Load default input from input.txt if it exists
+def load_default_input():
+    default_input = ""
+    try:
+        if os.path.exists('input.txt'):
+            with open('input.txt', 'r', encoding='utf-8') as f:
+                default_input = f.read().strip()
+            logger.info("Loaded default input from input.txt")
+    except Exception as e:
+        logger.error(f"Failed to load input.txt: {e}")
+    return default_input
+
 # ----------- UTILS ------------
 def preprocess_text(text):
     text = re.sub(r'[^\w\s]', '', text)
@@ -74,13 +86,24 @@ def predict_genres(summary, threshold=0.3):
     return genres if genres else ['None']
 
 # ----------- ROUTES ------------
+@app.route('/api/hello', methods=['GET'])
+def hello():
+    return jsonify({'message': 'Hello, World!'}), 200
+
 @app.route('/api/predict', methods=['POST'])
 def predict():
     data = request.get_json()
     if not data or 'input' not in data:
-        return jsonify({'error': 'Missing input data'}), 400
+        default_input = load_default_input()
+        if not default_input:
+            return jsonify({'error': 'Missing input data'}), 400
+        summary = default_input
+    else:
+        summary = data['input'].strip()
+        if not summary:
+            default_input = load_default_input()
+            summary = default_input if default_input else ""
 
-    summary = data['input'].strip()
     if not summary:
         return jsonify({'error': 'Input cannot be empty'}), 400
 
