@@ -14,7 +14,7 @@ import time
 from threading import Thread
 import requests
 
-# Download NLTK data
+# Download NLTK data (moved to ensure availability)
 nltk.download('punkt', quiet=True)
 nltk.download('stopwords', quiet=True)
 
@@ -30,7 +30,10 @@ SUPPORTED_LANGUAGES = [
     'sv', 'sw', 'ta', 'te', 'th', 'tl', 'tr', 'uk', 'ur', 'vi', 'zh-CN', 'zh-TW'
 ]
 
-# Load models
+# Load models with error handling
+genre_classifier = None
+vectorizer = None
+mlb = None
 try:
     with open('models/genre_classifier.pkl', 'rb') as f:
         genre_classifier = pickle.load(f)
@@ -38,8 +41,12 @@ try:
         vectorizer = pickle.load(f)
     with open('models/mlb.pkl', 'rb') as f:
         mlb = pickle.load(f)
+    logger.info("Models loaded successfully")
 except FileNotFoundError as e:
     logger.error(f"Model file not found: {e}")
+    raise
+except Exception as e:
+    logger.error(f"Failed to load models: {e}")
     raise
 
 # Init app and services
@@ -58,6 +65,8 @@ def preprocess_text(text):
     return ' '.join(words)
 
 def predict_genres(summary, threshold=0.3):
+    if not genre_classifier or not vectorizer or not mlb:
+        raise ValueError("Models not loaded properly")
     processed = preprocess_text(summary)
     features = vectorizer.transform([processed])
     probabilities = genre_classifier.predict_proba(features)
@@ -106,7 +115,9 @@ def tts():
         if translate_only:
             return jsonify({'translated_text': translated_text}), 200
 
-        filename = f"audio_{uuid.uuid4()}.mp3"
+        # Use a temporary directory for Render's ephemeral filesystem
+        temp_dir = '/tmp' if os.path.exists('/tmp') else '.'
+        filename = os.path.join(temp_dir, f"audio_{uuid.uuid4()}.mp3")
         tts = gTTS(text=translated_text, lang=lang, slow=False)
         tts.save(filename)
 
@@ -126,7 +137,7 @@ def tts():
         logger.error(f"TTS error: {e}")
         return jsonify({'error': f'Operation failed: {str(e)}'}), 500
     finally:
-        if not translate_only and filename:
+        if not translate_only and filename and os.path.exists(filename):
             def delete_file(path):
                 try:
                     time.sleep(2)
@@ -137,8 +148,10 @@ def tts():
                     logger.error(f"File delete error: {str(e)}")
             Thread(target=delete_file, args=(filename,)).start()
 
-# ----------- FOR VERCEL ------------
-app = app
+# ----------- DEPLOYMENT CONFIG ------------
+if __name__ == "__main__":
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port, debug=False)
 
-
-
+# For Render, use this Start Command in your settings:
+# gunicorn -w 4 -b 0.0.0.0:${PORT} app:app
