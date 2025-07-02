@@ -14,7 +14,7 @@ import time
 from threading import Thread
 import requests
 
-# Download NLTK data (moved to ensure availability)
+# Download NLTK data
 nltk.download('punkt', quiet=True)
 nltk.download('stopwords', quiet=True)
 
@@ -115,7 +115,7 @@ def tts():
         if translate_only:
             return jsonify({'translated_text': translated_text}), 200
 
-        # Use a temporary directory for Render's ephemeral filesystem
+        # Use a temporary directory for Vercel's ephemeral filesystem
         temp_dir = '/tmp' if os.path.exists('/tmp') else '.'
         filename = os.path.join(temp_dir, f"audio_{uuid.uuid4()}.mp3")
         tts = gTTS(text=translated_text, lang=lang, slow=False)
@@ -147,11 +147,3 @@ def tts():
                 except Exception as e:
                     logger.error(f"File delete error: {str(e)}")
             Thread(target=delete_file, args=(filename,)).start()
-
-# ----------- DEPLOYMENT CONFIG ------------
-if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port, debug=False)
-
-# For Render, use this Start Command in your settings:
-# gunicorn -w 4 -b 0.0.0.0:${PORT} app:app
